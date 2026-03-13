@@ -28,6 +28,21 @@ jobs:
           echo '{"username":"${{ secrets.KAGGLE_USERNAME }}","key":"${{ secrets.KAGGLE_KEY }}"}' > ~/.kaggle/kaggle.json
           chmod 600 ~/.kaggle/kaggle.json
 
+      - name: Debug - Test Kaggle auth
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          python -c "
+          from kaggle import KaggleApi
+          api = KaggleApi()
+          api.authenticate()
+          print('Kaggle auth OK')
+          datasets = api.dataset_list(search='nba-data-and-player-box-scores', user='eoinamoore')
+          for d in datasets:
+              print('Found dataset:', d.ref)
+          "
+
       - name: Step 1 - Ingest Kaggle data → Neon
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
