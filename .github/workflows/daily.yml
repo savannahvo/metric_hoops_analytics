@@ -1,0 +1,59 @@
+name: Daily NBA Data Pipeline
+
+on:
+  schedule:
+    - cron: '0 14 * * *'  # 14:00 UTC = 9 AM ET daily
+  workflow_dispatch:        # Allow manual trigger
+
+jobs:
+  daily-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Configure Kaggle credentials
+        run: |
+          mkdir -p ~/.kaggle
+          echo '{"username":"${{ secrets.KAGGLE_USERNAME }}","key":"${{ secrets.KAGGLE_KEY }}"}' > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+
+      - name: Step 1 - Ingest Kaggle data → Neon
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          cd scripts
+          python daily_ingest.py
+        continue-on-error: false
+
+      - name: Step 2 - Collect yesterday's closing odds → Neon
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd scripts
+          python daily_odds.py
+        continue-on-error: true  # Odds scraping can fail without blocking the pipeline
+
+      - name: Step 3 - Scrape injuries (ESPN + CBS) → Neon
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd scripts
+          python daily_injuries.py
+        continue-on-error: true  # Injury scraping can fail without blocking
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "::warning::Daily pipeline had failures. Check logs above."

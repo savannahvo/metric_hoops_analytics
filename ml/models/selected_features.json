@@ -1,0 +1,113 @@
+{
+  "selected_features": [
+    "ELO_DIFF",
+    "ROLL10_NET_RTG_DIFF",
+    "ROLL10_EFG_DIFF",
+    "TOV_RATE_DIFF",
+    "IS_B2B_DIFF",
+    "OREB_PCT_DIFF",
+    "STREAK_DIFF",
+    "EFG_PCT_DIFF",
+    "ROLL10_PTS_DIFF",
+    "OFF_RTG_DIFF",
+    "DEF_RTG_DIFF",
+    "DAYS_REST_DIFF",
+    "SPREAD_DIFF",
+    "ML_PROB_DIFF",
+    "OVER_UNDER"
+  ],
+  "features": [
+    {
+      "feature": "ELO_DIFF",
+      "label": "Elo Rating Diff",
+      "description": "Difference in Elo ratings (home minus away). Updated after every settled game.",
+      "why": "Elo captures long-run team quality better than win percentage."
+    },
+    {
+      "feature": "ROLL10_NET_RTG_DIFF",
+      "label": "Last 10 Net Rating Diff",
+      "description": "Net rating over last 10 games.",
+      "why": "Rolling efficiency captures hot/cold streaks."
+    },
+    {
+      "feature": "ROLL10_EFG_DIFF",
+      "label": "Last 10 eFG% Diff",
+      "description": "Effective FG% over the last 10 games.",
+      "why": "Shooting trends matter more than season averages in-season."
+    },
+    {
+      "feature": "TOV_RATE_DIFF",
+      "label": "Turnover Rate Diff",
+      "description": "Turnovers per 100 possessions.",
+      "why": "Turnovers directly gift the opponent easy scoring opportunities."
+    },
+    {
+      "feature": "IS_B2B_DIFF",
+      "label": "Back-to-Back Diff",
+      "description": "1 if home team on B2B but away is not, -1 if opposite, 0 if same.",
+      "why": "Playing on 0 days rest significantly impairs performance."
+    },
+    {
+      "feature": "OREB_PCT_DIFF",
+      "label": "Off Rebound % Diff",
+      "description": "Percentage of available offensive rebounds a team collects.",
+      "why": "Second-chance points create major scoring advantages."
+    },
+    {
+      "feature": "STREAK_DIFF",
+      "label": "Streak Diff",
+      "description": "Current winning/losing streak (positive = win streak, negative = losing streak). Home minus away.",
+      "why": "Teams on winning streaks often have momentum and confidence."
+    },
+    {
+      "feature": "EFG_PCT_DIFF",
+      "label": "Effective FG% Diff",
+      "description": "Accounts for the extra value of 3-pointers: (FGM + 0.5\u00d73PM) / FGA.",
+      "why": "Better shot quality than raw FG% \u2014 captures 3-point era efficiently."
+    },
+    {
+      "feature": "ROLL10_PTS_DIFF",
+      "label": "Last 10 PPG Diff",
+      "description": "Average points scored over last 10 games.",
+      "why": "Recent scoring output is a strong momentum signal."
+    },
+    {
+      "feature": "OFF_RTG_DIFF",
+      "label": "Offensive Rating Diff",
+      "description": "Points scored per 100 possessions (home minus away). Higher = more efficient offense.",
+      "why": "Best single measure of team offensive quality."
+    },
+    {
+      "feature": "DEF_RTG_DIFF",
+      "label": "Defensive Rating Diff",
+      "description": "Points allowed per 100 possessions (home minus away). Lower opponent score = better defense.",
+      "why": "Defense wins championships \u2014 and games."
+    },
+    {
+      "feature": "DAYS_REST_DIFF",
+      "label": "Days Rest Diff",
+      "description": "Days since last game (home minus away). Positive = home team more rested.",
+      "why": "Rest advantage is a proven predictor of game outcome."
+    },
+    {
+      "feature": "SPREAD_DIFF",
+      "label": "Vegas Spread",
+      "description": "Vegas point spread from home team's perspective (e.g., -4.5 = home favored by 4.5).",
+      "why": "Markets aggregate enormous information \u2014 spread is the single strongest predictor."
+    },
+    {
+      "feature": "ML_PROB_DIFF",
+      "label": "Moneyline Implied Probability",
+      "description": "Home team win probability implied by the moneyline odds.",
+      "why": "Moneyline markets are even more efficient than spreads for win/loss prediction."
+    },
+    {
+      "feature": "OVER_UNDER",
+      "label": "Over/Under",
+      "description": "Total points line set by oddsmakers.",
+      "why": "Game total reflects pace and offensive expectations."
+    }
+  ],
+  "model_version": "v2.0",
+  "feature_set": "B"
+}

@@ -1,0 +1,17 @@
+{
+  "classifier": {
+    "accuracy": 0.6683,
+    "auc": 0.7175,
+    "confusion_matrix": [
+      [
+        254,
+        217
+      ],
+      [
+        120,
+        425
+      ]
+    ],
+    "test_games": 1016
+  }
+}

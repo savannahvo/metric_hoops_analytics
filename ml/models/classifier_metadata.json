@@ -1,0 +1,85 @@
+{
+  "version": "v2.0",
+  "feature_set": "B",
+  "n_features": 15,
+  "feature_cols": [
+    "ELO_DIFF",
+    "ROLL10_NET_RTG_DIFF",
+    "ROLL10_EFG_DIFF",
+    "TOV_RATE_DIFF",
+    "IS_B2B_DIFF",
+    "OREB_PCT_DIFF",
+    "STREAK_DIFF",
+    "EFG_PCT_DIFF",
+    "ROLL10_PTS_DIFF",
+    "OFF_RTG_DIFF",
+    "DEF_RTG_DIFF",
+    "DAYS_REST_DIFF",
+    "SPREAD_DIFF",
+    "ML_PROB_DIFF",
+    "OVER_UNDER"
+  ],
+  "holdout_results": {
+    "A": {
+      "set": "A",
+      "accuracy": 0.6476534296028881,
+      "log_loss": 0.6211053400399944,
+      "brier_score": 0.216042256223488,
+      "auc": 0.7087411130333758,
+      "base_model_aucs": {
+        "logreg": 0.7099765539826659,
+        "rf": 0.701730459196774,
+        "xgb": 0.7040666422525014,
+        "mlp": 0.7023302899813526
+      },
+      "n_holdout": 1385,
+      "n_features": 9,
+      "feature_cols": [
+        "ELO_DIFF",
+        "ROLL10_NET_RTG_DIFF",
+        "ROLL10_EFG_DIFF",
+        "TOV_RATE_DIFF",
+        "IS_B2B_DIFF",
+        "OREB_PCT_DIFF",
+        "STREAK_DIFF",
+        "EFG_PCT_DIFF",
+        "ROLL10_PTS_DIFF"
+      ]
+    },
+    "B": {
+      "set": "B",
+      "accuracy": 0.683754512635379,
+      "log_loss": 0.597258063437107,
+      "brier_score": 0.2054949680832706,
+      "auc": 0.7401301527569064,
+      "base_model_aucs": {
+        "logreg": 0.7414497804829796,
+        "rf": 0.7350873648276065,
+        "xgb": 0.7368479207970804,
+        "mlp": 0.72913746437847
+      },
+      "n_holdout": 1385,
+      "n_features": 15,
+      "feature_cols": [
+        "ELO_DIFF",
+        "ROLL10_NET_RTG_DIFF",
+        "ROLL10_EFG_DIFF",
+        "TOV_RATE_DIFF",
+        "IS_B2B_DIFF",
+        "OREB_PCT_DIFF",
+        "STREAK_DIFF",
+        "EFG_PCT_DIFF",
+        "ROLL10_PTS_DIFF",
+        "OFF_RTG_DIFF",
+        "DEF_RTG_DIFF",
+        "DAYS_REST_DIFF",
+        "SPREAD_DIFF",
+        "ML_PROB_DIFF",
+        "OVER_UNDER"
+      ]
+    },
+    "winner": "B",
+    "reason": "Set B wins: Brier \u0394=0.0105, LogLoss \u0394=0.0238"
+  },
+  "training_at": "2026-03-13T21:43:37.195323+00:00"
+}

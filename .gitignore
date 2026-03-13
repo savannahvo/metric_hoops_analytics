@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+env/
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# ML data (large files)
+ml/data/*.csv
+ml/data/*.json
+ml/eda_output/
+ml/verify_output/
+
+# Model files (tracked separately via Git LFS or GitHub Actions)
+# ml/models/*.pkl  ← we DO commit these
+# backend/models/*.pkl ← we DO commit these
+
+# Kaggle credentials
+.kaggle/
+kaggle.json
+
+# Node.js
+node_modules/
+frontend/.next/
+frontend/out/
+
+# Misc
+.DS_Store
+*.log
+*.tmp

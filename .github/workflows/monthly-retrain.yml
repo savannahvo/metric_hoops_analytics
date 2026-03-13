@@ -1,0 +1,98 @@
+name: Monthly Model Retrain
+
+on:
+  schedule:
+    - cron: '0 6 1 * *'  # 06:00 UTC on the 1st of each month
+  workflow_dispatch:
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install ML dependencies
+        run: pip install -r ml/requirements.txt
+
+      - name: Configure Kaggle credentials
+        run: |
+          mkdir -p ~/.kaggle
+          echo '{"username":"${{ secrets.KAGGLE_USERNAME }}","key":"${{ secrets.KAGGLE_KEY }}"}' > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+
+      - name: Step 1 - Fresh Kaggle download
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          cd ml
+          python collect_data.py
+
+      - name: Step 2 - Verify data quality
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd ml
+          python verify_data.py --data-dir data/
+        # This will exit 1 if quality checks fail, halting the workflow
+
+      - name: Step 3 - EDA (save plots only)
+        run: |
+          cd ml
+          python eda.py --save-only --data-dir data/
+        continue-on-error: true
+
+      - name: Step 4 - Feature engineering
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd ml
+          python feature_engineering.py --data-dir data/ --output-dir data/
+
+      - name: Step 5 - Feature selection (SHAP pruning)
+        run: |
+          cd ml
+          python select_features.py --data-dir data/
+
+      - name: Step 6 - Train classifier
+        run: |
+          cd ml
+          python train_classifier.py --data-dir data/
+
+      - name: Step 7 - Train regressor
+        run: |
+          cd ml
+          python train_regressor.py --data-dir data/
+
+      - name: Step 8 - Evaluate models
+        run: |
+          cd ml
+          python evaluate_models.py --data-dir data/
+
+      - name: Step 9 - Copy models to backend
+        run: |
+          cp ml/models/classifier.pkl backend/models/classifier.pkl
+          cp ml/models/regressor.pkl backend/models/regressor.pkl
+          cp ml/models/selected_features.json backend/models/selected_features.json
+          echo "Models copied to backend/models/"
+
+      - name: Step 10 - Commit and push updated models
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add backend/models/classifier.pkl backend/models/regressor.pkl backend/models/selected_features.json
+          git diff --cached --quiet || git commit -m "retrain: $(date +%Y-%m-%d) monthly model update"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
