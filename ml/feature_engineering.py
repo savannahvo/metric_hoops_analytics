@@ -214,8 +214,6 @@ def compute_team_profile(games_before: pd.DataFrame) -> dict:
     tov = avg("TOV", 13.0)
     pts = avg("PTS", 110.0)
     opp_pts = avg("OPP_PTS", 110.0)
-    bench_pts = avg("BENCH_PTS", 35.0)
-    paint_pts = avg("PAINT_PTS", 45.0)
 
     # Four Factors
     poss = max(fga + 0.44 * fta - oreb + tov, 1.0)
@@ -254,8 +252,6 @@ def compute_team_profile(games_before: pd.DataFrame) -> dict:
         "TOV_RATE": tov_rate,
         "FT_RATE": ft_rate,
         "FG3_RATE": fg3_rate,
-        "BENCH_PTS": bench_pts,
-        "PAINT_PTS": paint_pts,
         "WIN_PCT": win_pct,
         "PLUS_MINUS": pm,
         "FGA": fga,
@@ -439,6 +435,7 @@ def compute_player_features(
 
 # ── ELO tracker ───────────────────────────────────────────────────────────────
 
+
 class EloTracker:
     """Tracks Elo ratings for all teams, updated after each settled game."""
 
@@ -458,6 +455,111 @@ class EloTracker:
         actual = 1.0 if home_win else 0.0
         self.ratings[str(home_id)] = _elo_update(home_elo, actual, expected, self.k)
         self.ratings[str(away_id)] = _elo_update(away_elo, 1.0 - actual, 1.0 - expected, self.k)
+
+
+# ── Series tracker ────────────────────────────────────────────────────────────
+
+class SeriesTracker:
+    """
+    Tracks NBA playoff series state for computing series-level features.
+    Must be updated AFTER each settled playoff game (same pattern as EloTracker).
+    All get_features() calls use pre-game state — strict lookahead prevention.
+    """
+
+    def __init__(self):
+        # key: (season, team1_id, team2_id) with ids sorted so team1 < team2
+        self._series: dict = {}
+        # key: (season, team_id) → list of results (1=win, 0=loss) in playoff order
+        self._playoff_results: dict = {}
+
+    def _key(self, season: str, home_id: str, away_id: str) -> tuple:
+        t1, t2 = sorted([home_id, away_id])
+        return (season, t1, t2)
+
+    def get_features(self, season: str, home_id: str, away_id: str, is_playoff: bool) -> dict:
+        """Return series features BEFORE updating (pre-game snapshot)."""
+        zeros = {
+            "SERIES_GAME_NUM": 0,
+            "SERIES_LEAD_DIFF": 0.0,
+            "IS_ELIMINATION_GAME": 0.0,
+            "CAN_CLINCH_SERIES": 0.0,
+            "SERIES_PTS_DIFF": 0.0,
+            "SERIES_EFG_DIFF": 0.0,
+            "PLAYOFF_GAMES_PLAYED_DIFF": 0.0,
+            "ROLL_PLAYOFF_WIN_PCT_DIFF": 0.0,
+        }
+        if not is_playoff:
+            return zeros
+
+        key = self._key(season, home_id, away_id)
+        games = self._series.get(key, [])
+        game_num = len(games) + 1
+
+        home_wins = away_wins = 0
+        pts_diff_sum = efg_diff_sum = 0.0
+        for g in games:
+            if g["winning_team"] == home_id:
+                home_wins += 1
+            else:
+                away_wins += 1
+            if g["home_id"] == home_id:
+                pts_diff_sum += g["home_pts"] - g["away_pts"]
+                efg_diff_sum += g["home_efg"] - g["away_efg"]
+            else:
+                pts_diff_sum += g["away_pts"] - g["home_pts"]
+                efg_diff_sum += g["away_efg"] - g["home_efg"]
+
+        n = len(games)
+        home_pg = len(self._playoff_results.get((season, home_id), []))
+        away_pg = len(self._playoff_results.get((season, away_id), []))
+
+        def _roll_wpct(tid: str, window: int = 5) -> float:
+            results = self._playoff_results.get((season, tid), [])
+            recent = results[-window:] if len(results) >= window else results
+            return sum(recent) / len(recent) if recent else 0.5
+
+        return {
+            "SERIES_GAME_NUM": game_num,
+            "SERIES_LEAD_DIFF": float(home_wins - away_wins),
+            "IS_ELIMINATION_GAME": 1.0 if away_wins == 3 else 0.0,
+            "CAN_CLINCH_SERIES": 1.0 if home_wins == 3 else 0.0,
+            "SERIES_PTS_DIFF": pts_diff_sum / n if n > 0 else 0.0,
+            "SERIES_EFG_DIFF": efg_diff_sum / n if n > 0 else 0.0,
+            "PLAYOFF_GAMES_PLAYED_DIFF": float(home_pg - away_pg),
+            "ROLL_PLAYOFF_WIN_PCT_DIFF": round(_roll_wpct(home_id) - _roll_wpct(away_id), 4),
+        }
+
+    def update(
+        self,
+        season: str,
+        home_id: str,
+        away_id: str,
+        home_win: bool,
+        home_pts: float,
+        away_pts: float,
+        home_efg: float,
+        away_efg: float,
+        is_playoff: bool,
+    ) -> None:
+        """Update series state after game result is known."""
+        if not is_playoff:
+            return
+        key = self._key(season, home_id, away_id)
+        if key not in self._series:
+            self._series[key] = []
+        self._series[key].append({
+            "home_id": home_id,
+            "winning_team": home_id if home_win else away_id,
+            "home_pts": home_pts,
+            "away_pts": away_pts,
+            "home_efg": home_efg,
+            "away_efg": away_efg,
+        })
+        for tid, won in [(home_id, home_win), (away_id, not home_win)]:
+            k = (season, tid)
+            if k not in self._playoff_results:
+                self._playoff_results[k] = []
+            self._playoff_results[k].append(1 if won else 0)
 
 
 # ── Main feature builder ──────────────────────────────────────────────────────
@@ -540,7 +642,18 @@ def build_training_data(
             player_game_logs[str(team_id)] = grp.copy()
         log.info(f"Built player game log index for {len(player_game_logs)} teams.")
 
+    # Build per-game EFG lookup for series tracker (game_id, team_id) → eFG
+    efg_by_game_team: dict = {}
+    for _, trow in team_df.iterrows():
+        gid = str(trow.get("GAME_ID", ""))
+        tid = str(trow.get("TEAM_ID", ""))
+        fga  = float(pd.to_numeric(trow.get("FGA",  0), errors="coerce") or 0)
+        fgm  = float(pd.to_numeric(trow.get("FGM",  0), errors="coerce") or 0)
+        fg3m = float(pd.to_numeric(trow.get("FG3M", 0), errors="coerce") or 0)
+        efg_by_game_team[(gid, tid)] = (fgm + 0.5 * fg3m) / fga if fga > 0 else 0.5
+
     elo = EloTracker()
+    series_tracker = SeriesTracker()
     rows = []
     skipped = 0
 
@@ -610,6 +723,10 @@ def build_training_data(
         home_games = hp.get("GAMES_PLAYED", 0)
         season_progress = min(home_games / 82.0, 1.0)
 
+        # ── Playoff / series features (pre-game snapshot) ─────────────────
+        is_playoff = _is_playoff(game_type)
+        sf = series_tracker.get_features(season, home_id, away_id, is_playoff)
+
         # ── Assemble differential features ───────────────────────────────
         def diff(key: str, home_dict: dict, away_dict: dict, default: float = 0.0) -> float:
             h = home_dict.get(key, default)
@@ -633,17 +750,15 @@ def build_training_data(
             "WIN": home_win,
 
             # Team efficiency diffs
-            "OFF_RTG_DIFF":     diff("OFF_RTG",   hp, ap),
-            "DEF_RTG_DIFF":     diff("DEF_RTG",   hp, ap),
-            "EFG_PCT_DIFF":     diff("EFG_PCT",   hp, ap),
-            "TS_PCT_DIFF":      diff("TS_PCT",    hp, ap),
-            "OREB_PCT_DIFF":    diff("OREB_PCT",  hp, ap),
-            "DREB_PCT_DIFF":    diff("DREB_PCT",  hp, ap),
-            "TOV_RATE_DIFF":    diff("TOV_RATE",  hp, ap),
-            "FT_RATE_DIFF":     diff("FT_RATE",   hp, ap),
-            "FG3_RATE_DIFF":    diff("FG3_RATE",  hp, ap),
-            "BENCH_PTS_DIFF":   diff("BENCH_PTS", hp, ap),
-            "PAINT_PTS_DIFF":   diff("PAINT_PTS", hp, ap),
+            "OFF_RTG_DIFF":  diff("OFF_RTG",  hp, ap),
+            "DEF_RTG_DIFF":  diff("DEF_RTG",  hp, ap),
+            "EFG_PCT_DIFF":  diff("EFG_PCT",  hp, ap),
+            "TS_PCT_DIFF":   diff("TS_PCT",   hp, ap),
+            "OREB_PCT_DIFF": diff("OREB_PCT", hp, ap),
+            "DREB_PCT_DIFF": diff("DREB_PCT", hp, ap),
+            "TOV_RATE_DIFF": diff("TOV_RATE", hp, ap),
+            "FT_RATE_DIFF":  diff("FT_RATE",  hp, ap),
+            "FG3_RATE_DIFF": diff("FG3_RATE", hp, ap),
 
             # Rolling form diffs
             "ROLL10_WIN_PCT_DIFF": diff("ROLL10_WIN_PCT", hr, ar),
@@ -669,18 +784,35 @@ def build_training_data(
             "WIN_PCT_DIFF":    diff("WIN_PCT", hp, ap),
             "STREAK_DIFF":     float(home_streak - away_streak),
             "SEASON_PROGRESS": round(season_progress, 4),
-            "IS_PLAYOFF":      float(int(_is_playoff(game_type))),
+            "IS_PLAYOFF":      float(int(is_playoff)),
 
             # Odds — NaN-imputed to 0.0 for historical training
             "SPREAD_DIFF":  0.0,
             "ML_PROB_DIFF": 0.0,
             "OVER_UNDER":   0.0,
+
+            # Playoff-specific (0 for regular season)
+            "SERIES_GAME_NUM":           float(sf["SERIES_GAME_NUM"]),
+            "SERIES_LEAD_DIFF":          sf["SERIES_LEAD_DIFF"],
+            "IS_ELIMINATION_GAME":       sf["IS_ELIMINATION_GAME"],
+            "CAN_CLINCH_SERIES":         sf["CAN_CLINCH_SERIES"],
+            "SERIES_PTS_DIFF":           sf["SERIES_PTS_DIFF"],
+            "SERIES_EFG_DIFF":           sf["SERIES_EFG_DIFF"],
+            "PLAYOFF_GAMES_PLAYED_DIFF": sf["PLAYOFF_GAMES_PLAYED_DIFF"],
+            "ROLL_PLAYOFF_WIN_PCT_DIFF": sf["ROLL_PLAYOFF_WIN_PCT_DIFF"],
         }
 
         rows.append(row)
 
-        # Update Elo after game result is known
+        # Update Elo and series tracker after game result is known
         elo.update(home_id, away_id, bool(home_win))
+        series_tracker.update(
+            season, home_id, away_id, bool(home_win),
+            float(home_score), float(away_score),
+            efg_by_game_team.get((game_id, home_id), 0.5),
+            efg_by_game_team.get((game_id, away_id), 0.5),
+            is_playoff,
+        )
 
         if (idx + 1) % 1000 == 0:
             log.info(f"  Processed {idx + 1:,} / {len(games_df):,} games ...")

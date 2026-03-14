@@ -22,8 +22,6 @@ FEATURES = [
     "TOV_RATE_DIFF",
     "FT_RATE_DIFF",
     "FG3_RATE_DIFF",
-    "BENCH_PTS_DIFF",
-    "PAINT_PTS_DIFF",
     # Rolling form (last 10 games)
     "ROLL10_WIN_PCT_DIFF",
     "ROLL10_NET_RTG_DIFF",
@@ -50,6 +48,15 @@ FEATURES = [
     "SPREAD_DIFF",
     "ML_PROB_DIFF",
     "OVER_UNDER",
+    # Playoff-specific (0 for regular season games)
+    "SERIES_GAME_NUM",
+    "SERIES_LEAD_DIFF",
+    "IS_ELIMINATION_GAME",
+    "CAN_CLINCH_SERIES",
+    "SERIES_PTS_DIFF",
+    "SERIES_EFG_DIFF",
+    "PLAYOFF_GAMES_PLAYED_DIFF",
+    "ROLL_PLAYOFF_WIN_PCT_DIFF",
 ]
 
 FEATURES_NO_ODDS = [f for f in FEATURES if f not in ("SPREAD_DIFF", "ML_PROB_DIFF", "OVER_UNDER")]
@@ -100,16 +107,6 @@ FEATURE_METADATA = {
         "label": "3-Point Rate Diff",
         "description": "3PA / FGA — share of shots that are 3-pointers.",
         "why": "3-point volume drives variance and scoring upside."
-    },
-    "BENCH_PTS_DIFF": {
-        "label": "Bench Points Diff",
-        "description": "Average bench unit points per game (home minus away).",
-        "why": "Depth matters for wear down opponents in close games."
-    },
-    "PAINT_PTS_DIFF": {
-        "label": "Paint Points Diff",
-        "description": "Points in the paint per game difference.",
-        "why": "Interior dominance correlates with winning."
     },
     "ROLL10_WIN_PCT_DIFF": {
         "label": "Last 10 Win % Diff",
@@ -215,6 +212,46 @@ FEATURE_METADATA = {
         "label": "Over/Under",
         "description": "Total points line set by oddsmakers.",
         "why": "Game total reflects pace and offensive expectations."
+    },
+    "SERIES_GAME_NUM": {
+        "label": "Series Game #",
+        "description": "Which game of this playoff series (1–7). 0 for regular season.",
+        "why": "Later games in a series carry more pressure and predictability shifts.",
+    },
+    "SERIES_LEAD_DIFF": {
+        "label": "Series Lead Diff",
+        "description": "Home team's series wins minus away team's series wins (-3 to +3). 0 for regular season.",
+        "why": "Teams leading a series have a psychological and strategic edge.",
+    },
+    "IS_ELIMINATION_GAME": {
+        "label": "Elimination Game",
+        "description": "1 if the home team faces elimination (away leads 3-0 to 3-2). 0 otherwise.",
+        "why": "Teams playing to stay alive often perform differently than favorites.",
+    },
+    "CAN_CLINCH_SERIES": {
+        "label": "Can Clinch",
+        "description": "1 if the home team can win the series with a win (leads 3-0 to 3-2). 0 otherwise.",
+        "why": "Closing-out teams have momentum but can sometimes let up.",
+    },
+    "SERIES_PTS_DIFF": {
+        "label": "Series Avg Point Diff",
+        "description": "Average point differential for the home team in this series so far. 0 for regular season.",
+        "why": "Dominance in the series thus far is a strong predictor of the next game.",
+    },
+    "SERIES_EFG_DIFF": {
+        "label": "Series eFG% Diff",
+        "description": "Average effective FG% differential for home team in this series. 0 for regular season.",
+        "why": "Shooting edge in a series often persists due to defensive schemes.",
+    },
+    "PLAYOFF_GAMES_PLAYED_DIFF": {
+        "label": "Playoff Games Played Diff",
+        "description": "Home team's total playoff games this season minus away team's. 0 for regular season.",
+        "why": "Teams in longer series accumulate more fatigue than opponents with sweeps.",
+    },
+    "ROLL_PLAYOFF_WIN_PCT_DIFF": {
+        "label": "Rolling Playoff Win % Diff",
+        "description": "Win % over last 5 playoff games (home minus away). 0 for regular season.",
+        "why": "Playoff momentum — teams playing well recently often continue that form.",
     },
 }
 
