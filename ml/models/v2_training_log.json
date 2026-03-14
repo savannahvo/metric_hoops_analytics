@@ -5,8 +5,8 @@
     "ML_PROB_DIFF": 0.06204379562043805,
     "OVER_UNDER": 220.0
   },
-  "winner_set": "B",
-  "winner_reason": "Set B wins: Brier \u0394=0.0105, LogLoss \u0394=0.0238",
-  "training_at": "2026-03-13T21:43:37.195903+00:00",
+  "winner_set": "C",
+  "winner_reason": "Forced by --set C flag",
+  "training_at": "2026-03-14T02:30:53.100025+00:00",
   "dry_run": false
 }

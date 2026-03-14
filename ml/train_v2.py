@@ -44,7 +44,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
-from feature_sets import SET_A_FEATURES, SET_B_FEATURES, FEATURE_SET_NAMES
+from feature_sets import SET_A_FEATURES, SET_B_FEATURES, SET_C_FEATURES, FEATURE_SET_NAMES
 from feature_schema import FEATURE_METADATA
 from odds_loader import load_odds, compute_training_medians, merge_odds
 
@@ -482,7 +482,7 @@ def main():
     parser.add_argument("--odds-csv", help="Override path to historical_odds_2020_2025.csv")
     parser.add_argument("--output-dir", default="models/", help="Directory to write artifacts")
     parser.add_argument("--dry-run", action="store_true", help="Save candidate files without overwriting production")
-    parser.add_argument("--set", choices=["A", "B", "auto"], default="auto", help="Force feature set or auto-select")
+    parser.add_argument("--set", choices=["A", "B", "C", "auto"], default="auto", help="Force feature set or auto-select")
     args = parser.parse_args()
 
     # --- Load training data ---
@@ -541,6 +541,13 @@ def main():
             train_val_df, holdout_df, SET_B_FEATURES, oof_dfs["B"], "B"
         )
 
+    if args.set == "C":
+        log.info("\n=== Feature Set C (%d features) ===", len(SET_C_FEATURES))
+        oof_dfs["C"] = generate_oof_predictions(train_val_df, SET_C_FEATURES)
+        results["C"], _, _, _ = evaluate_on_holdout(
+            train_val_df, holdout_df, SET_C_FEATURES, oof_dfs["C"], "C"
+        )
+
     # --- Pick winner ---
     if args.set == "A":
         winner = "A"
@@ -548,6 +555,9 @@ def main():
     elif args.set == "B":
         winner = "B"
         winner_reason = "Forced by --set B flag"
+    elif args.set == "C":
+        winner = "C"
+        winner_reason = "Forced by --set C flag"
     else:
         winner, winner_reason = pick_winner(results["A"], results["B"])
 
