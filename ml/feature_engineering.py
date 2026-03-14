@@ -75,13 +75,12 @@ def _elo_update(elo: float, actual: float, expected: float, k: float = ELO_K) ->
 
 
 def _normalize_date_col(df: pd.DataFrame) -> pd.DataFrame:
-    """Detect and normalise the game date column to GAME_DATE (datetime)."""
-    for col in ("gameDateTimeEst", "gameDate", "game_date", "GAME_DATE"):
-        if col in df.columns:
-            df["GAME_DATE"] = pd.to_datetime(df[col], errors="coerce", utc=True)
-            df["GAME_DATE"] = df["GAME_DATE"].dt.tz_localize(None)
-            return df
-    raise KeyError("No recognisable date column found in DataFrame.")
+    """Parse gameDateTimeEst (eoinamoore dataset) into a tz-naive GAME_DATE column."""
+    if "gameDateTimeEst" not in df.columns:
+        raise KeyError("gameDateTimeEst column not found — is this the eoinamoore dataset?")
+    df["GAME_DATE"] = pd.to_datetime(df["gameDateTimeEst"], errors="coerce", utc=True)
+    df["GAME_DATE"] = df["GAME_DATE"].dt.tz_localize(None)
+    return df
 
 
 def _is_playoff(game_type: str) -> bool:
@@ -101,40 +100,26 @@ def load_games(data_dir: str) -> pd.DataFrame:
     df = _normalize_date_col(df)
     log.info(f"Games.csv loaded: {len(df):,} rows")
 
-    # Normalise column names to a consistent set
-    # NOTE: Dataset uses lowercase 't' in team names (hometeamId, awayteamId)
-    renames = {
-        "gameId": "GAME_ID",
-        "homeTeamId": "HOME_TEAM_ID",   # some dataset versions
-        "hometeamId": "HOME_TEAM_ID",   # eoinamoore dataset
-        "awayTeamId": "AWAY_TEAM_ID",
-        "awayteamId": "AWAY_TEAM_ID",
-        "homeTeamName": "HOME_TEAM_NAME",
+    # eoinamoore column names → internal names
+    df.rename(columns={
+        "gameId":       "GAME_ID",
+        "hometeamId":   "HOME_TEAM_ID",
+        "awayteamId":   "AWAY_TEAM_ID",
         "hometeamName": "HOME_TEAM_NAME",
-        "awayTeamName": "AWAY_TEAM_NAME",
         "awayteamName": "AWAY_TEAM_NAME",
-        "homeScore": "HOME_SCORE",
-        "awayScore": "AWAY_SCORE",
-        "seasonYear": "SEASON",
-        "gameType": "GAME_TYPE",
-    }
-    for old, new in renames.items():
-        if old in df.columns and new not in df.columns:
-            df.rename(columns={old: new}, inplace=True)
+        "homeScore":    "HOME_SCORE",
+        "awayScore":    "AWAY_SCORE",
+        "gameType":     "GAME_TYPE",
+    }, inplace=True)
 
-    # Derive SEASON from GAME_DATE if no seasonYear column exists
-    # NBA season X starts in October of year X, ends June of year X+1.
-    if "SEASON" not in df.columns and "GAME_DATE" in df.columns:
-        def _date_to_season(dt):
-            if pd.isna(dt):
-                return None
-            year = dt.year
-            month = dt.month
-            if month >= 10:
-                return f"{year}-{str(year + 1)[2:]}"
-            else:
-                return f"{year - 1}-{str(year)[2:]}"
-        df["SEASON"] = df["GAME_DATE"].apply(_date_to_season)
+    # Derive SEASON from GAME_DATE (eoinamoore has no season column)
+    def _date_to_season(dt):
+        if pd.isna(dt):
+            return None
+        if dt.month >= 10:
+            return f"{dt.year}-{str(dt.year + 1)[2:]}"
+        return f"{dt.year - 1}-{str(dt.year)[2:]}"
+    df["SEASON"] = df["GAME_DATE"].apply(_date_to_season)
 
     return df
 
@@ -146,35 +131,29 @@ def load_team_stats(data_dir: str) -> pd.DataFrame:
     df = _normalize_date_col(df)
     log.info(f"TeamStatistics.csv loaded: {len(df):,} rows")
 
-    renames = {
-        "gameId": "GAME_ID",
-        "teamId": "TEAM_ID",
-        "teamName": "TEAM_NAME",
-        "home": "IS_HOME",
-        "win": "WIN",
-        "teamScore": "PTS",
-        "opponentScore": "OPP_PTS",
-        "fieldGoalsAttempted": "FGA",
-        "fieldGoalsMade": "FGM",
-        "threePointersMade": "FG3M",
+    # eoinamoore column names → internal names
+    df.rename(columns={
+        "gameId":               "GAME_ID",
+        "teamId":               "TEAM_ID",
+        "teamName":             "TEAM_NAME",
+        "home":                 "IS_HOME",
+        "win":                  "WIN",
+        "teamScore":            "PTS",
+        "opponentScore":        "OPP_PTS",
+        "fieldGoalsAttempted":  "FGA",
+        "fieldGoalsMade":       "FGM",
+        "threePointersMade":    "FG3M",
         "threePointersAttempted": "FG3A",
-        "freeThrowsMade": "FTM",
-        "freeThrowsAttempted": "FTA",
-        "reboundsOffensive": "OREB",
-        "reboundsDefensive": "DREB",
-        "assists": "AST",
-        "steals": "STL",
-        "blocks": "BLK",
-        "turnovers": "TOV",
-        "pointsInThePaint": "PAINT_PTS",
-        "benchPoints": "BENCH_PTS",
-        "plusMinusDiff": "PLUS_MINUS",    # some dataset versions
-        "plusMinusPoints": "PLUS_MINUS",  # eoinamoore dataset
-        "seasonYear": "SEASON",
-    }
-    for old, new in renames.items():
-        if old in df.columns and new not in df.columns:
-            df.rename(columns={old: new}, inplace=True)
+        "freeThrowsMade":       "FTM",
+        "freeThrowsAttempted":  "FTA",
+        "reboundsOffensive":    "OREB",
+        "reboundsDefensive":    "DREB",
+        "assists":              "AST",
+        "steals":               "STL",
+        "blocks":               "BLK",
+        "turnovers":            "TOV",
+        "plusMinusPoints":      "PLUS_MINUS",
+    }, inplace=True)
 
     # Boolean normalisation
     for col in ("WIN", "IS_HOME"):
@@ -192,24 +171,17 @@ def load_player_stats(data_dir: str) -> pd.DataFrame:
     df = pd.read_csv(path, low_memory=False)
     log.info(f"PlayerStatistics.csv loaded: {len(df):,} rows")
 
-    renames = {
-        "gameId": "GAME_ID",
-        "teamId": "TEAM_ID",           # some dataset versions
-        "playerId": "PLAYER_ID",       # some dataset versions
-        "personId": "PLAYER_ID",       # eoinamoore dataset
-        "playerName": "PLAYER_NAME",
-        "points": "PTS",
-        "assists": "AST",
-        "rebounds": "REB",
-        "reboundsTotal": "REB",
+    # eoinamoore column names → internal names
+    # Note: PlayerStatistics.csv has no teamId column
+    df.rename(columns={
+        "gameId":          "GAME_ID",
+        "personId":        "PLAYER_ID",
+        "points":          "PTS",
+        "assists":         "AST",
+        "reboundsTotal":   "REB",
         "plusMinusPoints": "PLUS_MINUS",
-        "numMinutes": "MIN",
-        "minutes": "MIN",
-        "seasonYear": "SEASON",
-    }
-    for old, new in renames.items():
-        if old in df.columns and new not in df.columns:
-            df.rename(columns={old: new}, inplace=True)
+        "numMinutes":      "MIN",
+    }, inplace=True)
 
     return df
 

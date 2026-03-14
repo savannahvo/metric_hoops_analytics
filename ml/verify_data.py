@@ -123,33 +123,40 @@ def check_file_existence(data_dir: str) -> tuple[list[dict], list[dict]]:
     return checks, warnings
 
 
+def _date_to_season(dt: pd.Timestamp) -> str | None:
+    """Derive NBA season string (e.g. '2020-21') from a game date."""
+    if pd.isna(dt):
+        return None
+    year, month = dt.year, dt.month
+    if month >= 10:
+        return f"{year}-{str(year + 1)[2:]}"
+    return f"{year - 1}-{str(year)[2:]}"
+
+
 def check_game_counts(
     games_df: pd.DataFrame,
 ) -> tuple[list[dict], list[dict]]:
     """
     Verify game counts per season are within expected range.
-    Games.csv should have one row per game; we group by seasonYear.
+    Season is derived from gameDateTimeEst (eoinamoore dataset has no season column).
     """
     checks: list[dict] = []
     warnings: list[dict] = []
 
-    # Detect season column
-    season_col = None
-    for col in ("seasonYear", "season_year", "SEASON_YEAR", "season"):
-        if col in games_df.columns:
-            season_col = col
-            break
-
-    if season_col is None:
+    if "gameDateTimeEst" not in games_df.columns:
         warnings.append({
             "check": "game_counts_per_season",
             "passed": True,
-            "message": "No season column found in Games.csv — skipping season count check.",
+            "message": "gameDateTimeEst not found in Games.csv — skipping season count check.",
             "severity": "warning",
         })
         return checks, warnings
 
-    season_counts = games_df.groupby(season_col).size().to_dict()
+    parsed = pd.to_datetime(games_df["gameDateTimeEst"], errors="coerce")
+    season_series = parsed.apply(_date_to_season)
+    # Only count seasons we care about
+    season_series = season_series[season_series.isin(EXPECTED_GAME_COUNTS.keys())]
+    season_counts = season_series.value_counts().to_dict()
     log.info(f"Game counts by season: {season_counts}")
 
     for season, expected in EXPECTED_GAME_COUNTS.items():
@@ -212,34 +219,22 @@ def check_nan_rates(
     """
     Check NaN rate for candidate feature columns.
     Flags any column with >20% missing values as a critical failure.
-
-    NOTE: Only checks modern seasons (2015-16 onward) because the dataset
-    spans NBA history back to the 1940s when advanced stats (pointsInThePaint,
-    benchPoints, etc.) simply didn't exist. Pre-modern rows are legitimate
-    historical data — not data quality issues.
+    Filtered to 2020-21 onward — the only seasons used for training.
     """
     checks: list[dict] = []
     warnings: list[dict] = []
 
-    # Filter to modern seasons only (2015-16 onward, i.e. dates >= 2015-10-01).
-    # The dataset spans NBA history back to the 1940s; advanced stats like
-    # pointsInThePaint and benchPoints only exist in the modern era.
     modern_df = teamstats_df
-    date_col = None
-    for col in ("gameDateTimeEst", "gameDate", "GAME_DATE", "game_date"):
-        if col in teamstats_df.columns:
-            date_col = col
-            break
-    if date_col is not None:
+    if "gameDateTimeEst" in teamstats_df.columns:
         try:
-            parsed_dates = pd.to_datetime(teamstats_df[date_col], errors="coerce")
-            modern_df = teamstats_df[parsed_dates >= "2015-10-01"]
+            parsed_dates = pd.to_datetime(teamstats_df["gameDateTimeEst"], errors="coerce")
+            modern_df = teamstats_df[parsed_dates >= "2020-10-01"]
             log.info(
-                f"NaN rate check: filtered to {len(modern_df):,} modern-season rows "
-                f"(date >= 2015-10-01) out of {len(teamstats_df):,} total."
+                f"NaN rate check: filtered to {len(modern_df):,} rows "
+                f"(gameDateTimeEst >= 2020-10-01) out of {len(teamstats_df):,} total."
             )
         except Exception:
-            pass  # Fall back to full dataframe if date column is unusable
+            pass
 
     total_rows = len(modern_df)
 
@@ -296,16 +291,8 @@ def check_duplicate_game_team(
     checks: list[dict] = []
     warnings: list[dict] = []
 
-    game_col = None
-    team_col = None
-    for gc in ("gameId", "game_id", "GAME_ID"):
-        if gc in teamstats_df.columns:
-            game_col = gc
-            break
-    for tc in ("teamId", "team_id", "TEAM_ID"):
-        if tc in teamstats_df.columns:
-            team_col = tc
-            break
+    game_col = "gameId" if "gameId" in teamstats_df.columns else None
+    team_col = "teamId" if "teamId" in teamstats_df.columns else None
 
     if game_col is None or team_col is None:
         warnings.append({
@@ -432,21 +419,16 @@ def check_date_validity(
     checks: list[dict] = []
     warnings: list[dict] = []
 
-    date_col = None
-    for col in ("gameDateTimeEst", "gameDate", "GAME_DATE", "game_date"):
-        if col in teamstats_df.columns:
-            date_col = col
-            break
-
-    if date_col is None:
+    if "gameDateTimeEst" not in teamstats_df.columns:
         warnings.append({
             "check": "date_validity",
             "passed": True,
-            "message": "No date column found in TeamStatistics.csv — skipping.",
+            "message": "gameDateTimeEst not found in TeamStatistics.csv — skipping.",
             "severity": "warning",
         })
         return checks, warnings
 
+    date_col = "gameDateTimeEst"
     parsed = pd.to_datetime(teamstats_df[date_col], errors="coerce")
     unparseable = int(parsed.isna().sum())
     total = len(teamstats_df)
